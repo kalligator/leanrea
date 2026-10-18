@@ -12,9 +12,18 @@ shutil.rmtree(ws, ignore_errors=True); os.makedirs(ws)
 for f in ["app.asar", "mac_utils.node", "gh"]:
     subprocess.run(["cp", "-c", f"{B}/targets/{f}", ws], check=True)
 subprocess.run(["cp", "-cR", f"{B}/targets/app.asar.unpacked", ws], check=True)
+# Bash runs in Claude Code's OS sandbox, fail-closed: no unsandboxed fallback, home unreadable except the run dir,
+# network limited to the npm registry (for `npx @electron/asar`). Bash is auto-approved only because it is sandboxed.
+sandbox = {"enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False, "autoAllowBashIfSandboxed": True,
+           "filesystem": {"denyRead": ["~/"], "allowRead": [ws]},
+           "network": {"allowedDomains": ["registry.npmjs.org"], "strictAllowlist": True}}
 cmd = ["claude", "-p", "--model", MODEL, "--output-format", "stream-json", "--verbose", "--strict-mcp-config",
-       "--no-session-persistence", "--max-budget-usd", "4",
-       "--allowedTools", "Bash,Read,Grep,Glob,Write,Skill,mcp__rea"]
+       "--no-session-persistence", "--max-budget-usd", "4", "--settings", json.dumps({"sandbox": sandbox}),
+       "--allowedTools", "Read(./**),Grep,Glob,Edit(./**),Skill,mcp__rea"]
+# Pass only what claude needs; drop unrelated tokens (AWS_*, GH_TOKEN, ...) from the parent shell.
+KEEP = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "TERM"}
+env = {k: v for k, v in os.environ.items() if k in KEEP or k.startswith(("ANTHROPIC_", "CLAUDE_"))}
+env.update(npm_config_cache=os.path.join(ws, ".npm"), GOTELEMETRY="off")
 prompt = task["prompt"]
 skills = os.path.join(ws, ".claude", "skills")
 if ARM == "rea":
@@ -25,7 +34,7 @@ elif ARM == "leanrea":
     shutil.copytree(f"{REPO}/leanrea", f"{skills}/leanrea")
     prompt = "/leanrea " + prompt
 t0 = time.time()
-p = subprocess.run(cmd, input=prompt, cwd=ws, capture_output=True, text=True, timeout=1500)
+p = subprocess.run(cmd, input=prompt, cwd=ws, env=env, capture_output=True, text=True, timeout=1500)
 wall = time.time() - t0
 r, tools = {"result": p.stdout[-2000:] + p.stderr[-2000:], "is_error": True}, []
 for line in p.stdout.splitlines():

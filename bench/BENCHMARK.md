@@ -74,6 +74,7 @@ REA's raw `tools/list`: 207 tools, 3.35 MB JSON (745 KB input schemas, 2.46 MB o
 
 ## Caveats
 - n=3 per cell, one model (Sonnet), one machine, three targets. The REA arm used Claude Code's deferred tool search, which is REA's best case. Agents that load every tool pay the 369k-token row above.
+- The published runs used blanket `--allowedTools Bash,...` with no sandbox. `run.py` now runs Bash in Claude Code's sandbox (fail-closed, home dir unreadable except the run dir, network limited to registry.npmjs.org), scopes Read/Edit to the run dir, and filters the environment. Re-run before you compare new numbers with the table above. The sandbox covers Bash only: the REA MCP server runs outside it. For untrusted targets, also use a disposable VM.
 - Native providers (Ghidra, Hopper, IDA) are not installed, so REA used its built-in native path. The lean arm used otool.
 
 Reproduce: `./setup.sh`, then `./run_all.sh` (or `python3 -I run.py <none|leanrea|rea> <task> <rep>`) and `./ctx.sh`.
