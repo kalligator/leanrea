@@ -61,5 +61,9 @@ Go: `go version -m T` alone usually answers the question.
 - Comparing versions: diff the inventories (`nm`, the module list, `go version -m`) before you diff any code.
 - Rebuilding: write the minimal reimplementation, then test it against the original (same inputs, same outputs).
 
+## Traps
+- Electron copy: copy `app.asar.unpacked/` together with `app.asar`. `asar extract` reads the unpacked files from `<archive>.unpacked/` next to the archive, and fails on every one of them if that folder is missing.
+- Ghidra: `DecompileAll.java` is not stock; it ships in `ghidra/` here. Run `analyzeHeadless $D p -import T -loader-libraryLoadDepth 0 -scriptPath <skill dir>/ghidra -postScript DecompileAll.java $D/decomp.c -deleteProject` (depth 0 skips importing every library on the search path).
+
 ## Install (only on request)
 `brew install jadx apktool radare2 binwalk wabt wireshark ghidra` · `npm i -g @electron/asar` · `dotnet tool install -g ilspycmd` · `cargo install cargo-audit`.
