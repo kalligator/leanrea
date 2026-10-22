@@ -67,3 +67,8 @@ Go: `go version -m T` alone usually answers the question.
 
 ## Install (only on request)
 `brew install jadx apktool radare2 binwalk wabt wireshark ghidra` · `npm i -g @electron/asar` · `dotnet tool install -g ilspycmd` · `cargo install cargo-audit`.
+
+## Platform: Windows
+This skill targets macOS. On Windows `otool`, `lipo`, `nm -gU` and `dtrace` do not exist.
+**Read `WINDOWS.md` in this directory first** — it maps every macOS command to a Windows equivalent
+(`llvm-objdump`, `llvm-nm`, `llvm-readobj`, `llvm-strings`, GnuWin32 `file`, `pefile`), including a ready-to-paste PE recon block.
