@@ -87,3 +87,31 @@ ilspycmd target.dll > out.cs
 ```sh
 export PATH="/c/Program Files/LLVM/bin:/c/Program Files (x86)/GnuWin32/bin:$PATH"
 ```
+
+## 实战反馈（2026-10-22，首次运行）
+
+以下两条是分析 `C://Program Files\aiwork\aiwork.exe`（195 MB Electron 应用）时实际踩到的，
+已在真实目标上复现：
+
+### 1. `llvm-strings` 在大文件上失效
+对一个 195 MB 的 PE，`llvm-strings -n 6 T | rg ...` **不报错但输出为空**（对 3 MB 以内的文件正常）。
+超过约 100 MB 时改用 Python mmap 分块搜索：
+
+```sh
+python -c "
+import mmap
+p=r'TARGET.exe'; f=open(p,'rb'); m=mmap.mmap(f.fileno(),0,access=mmap.ACCESS_READ)
+b=b'Chrome/'; i=m.find(b)
+print(m[i:i+60].split(b'\x00')[0].decode('ascii','replace') if i>=0 else 'not found')"
+```
+
+同时要搜 UTF-16LE（`pat.encode('utf-16-le')`）：Electron 的窗口名、路径常量多为宽字符。
+
+### 2. GnuWin32 `file` 会误判新版 Electron
+`file -b` 对 Electron 主程序返回 `PE32+ executable ... Mono/.Net assembly` —— **这是误报**，
+GnuWin32 file 5.03 的 magic 库太老。不要据此判定为 .NET。
+交叉验证方式：看节表里有没有 `.text` 超过 100 MB、以及 `LICENSES.chromium.html` / `icudtl.dat` / `chrome_*.pak` 是否同目录。
+
+### 3. 不要对超大 PE 做全量反汇编
+165 MB 的 `.text` 会产生数十 GB 文本。用 `llvm-objdump -p`（只读头部）+ `pefile` + 定向字符串，
+三者组合足以回答"这是什么、什么版本、依赖什么、怎么打包"。
