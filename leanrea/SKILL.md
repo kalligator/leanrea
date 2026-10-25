@@ -1,6 +1,6 @@
 ---
 name: leanrea
-description: Reverse engineer shipped software with plain local CLI tools, no MCP needed. Covers Electron/JS bundles, native Mach-O/ELF/PE, Go/Rust/.NET/Flutter/WASM binaries, APKs, SQLite, pcaps, firmware and websites. Use to explain how a feature works, extract versions/deps, compare builds, or rebuild a feature.
+description: Reverse engineer shipped software with plain local CLI tools, no MCP needed. Covers Electron/JS bundles, native Mach-O/ELF/PE, Go/Rust/.NET/Flutter/WASM binaries, APKs/IPAs, SQLite, pcaps, firmware and websites. Use to explain how a feature works, extract versions/deps, compare builds, or rebuild a feature.
 ---
 
 # leanrea: fast path
@@ -23,7 +23,7 @@ Native (Mach-O):
 ```sh
 T=./bin; D=$(mktemp -d "${TMPDIR:-/tmp}/re-$(basename "$T").XXXX"); echo "D=$D"; file "$T"; lipo -info "$T"; otool -L "$T"; echo '--- EXPORTS'; nm -gU "$T" | head -150; echo '--- IMPORTS'; nm -u "$T" | rg -v '^__Z|napi_' | tr '\n' ' '; echo; echo '--- STRINGS'; strings -a -n 6 "$T" | rg -v '^[_$.]' | head -400; otool -tV "$T" > "$D/dis.txt"; echo '--- FUNCS'; rg '^[_a-zA-Z].*:$' "$D/dis.txt" | rg -v '^_?_?Z?N?St3' | head -150
 ```
-Then read one function: `awk '/^FUNC_LABEL:$/{p=1;next} p&&/^[_a-zA-Z].*:$/{exit} p' $D/"$D/dis.txt" | rg 'bl|b\.|cmp|literal|mov\s+w2'`.
+Then read one function: `awk '/^FUNC_LABEL:$/{p=1;next} p&&/^[_a-zA-Z].*:$/{exit} p' "$D/dis.txt" | rg 'bl|b\.|cmp|literal|mov\s+w2'`.
 
 Electron:
 ```sh
@@ -35,6 +35,7 @@ Go: `go version -m T` alone usually answers the question.
 
 ## Router
 - **Electron app** (`*.app/Contents/Resources/app.asar`): `npx -y @electron/asar extract app.asar X` (also see `app.asar.unpacked/` for `.node` addons). Entry point: `jq .main X/package.json`. Surface: `rg -n -o '.{0,120}(ipcMain\.(handle|handleOnce|on|once)|ipcRenderer\.(invoke|send|sendSync|on)|contextBridge\.exposeIn(Main|Isolated)World|webPreferences|preload:|nodeIntegration|contextIsolation|sandbox|\.node\b).{0,160}' -uu X --glob '!node_modules'`. App-specific IPC wrappers often hide the channels, so also run `rg -uu -o '"[a-z]+:[a-z0-9:-]+"' X/<main> | sort -u`. Fuses: `npx -y @electron/fuses read --app A.app`.
+- **iOS IPA** (`*.ipa`, zip with `Payload/*.app`): `unzip -q T -d X`. Binary: `X/Payload/*.app/<CFBundleExecutable from Info.plist>`. Then route the Mach-O through the native rows. Core Data: `find X -name '*.momd'`. Frameworks: `ls X/Payload/*.app/Frameworks/`. Provisioning: `strings X/Payload/*.app/embedded.mobileprovision`. On Linux: limited to `strings`/`nm`/`readelf`; transfer to macOS for full otool analysis or use `jtool2`.
 - **Web bundle / minified JS**: Find `sourceMappingURL`. If the map has `sourcesContent`, dump the sources: `jq -r '.sources[]'`. For webpack, grep the module ids, then slice around the hit. For pretty-print: `npx -y prettier --parser babel F > F.pretty.js`, then read with line ranges.
 - **Hermes / bytenode / V8 snapshot**: Hermes magic is `c6 1f bc 03` (`index.android.bundle`): use `hermes-dec` / `hbc-decompiler`. `.jsc` (bytenode) cannot be decompiled: use strings and runtime hooks.
 - **Mach-O** (`file`: Mach-O): `lipo -info` (thin first: `lipo -thin arm64 -o T1 T`). Then: `otool -L` (libs); `xcrun dyld_info -exports -imports`; `nm -gU` (exports) / `nm -u` (imports = the capability map); `strings -a -n 6`; `otool -l | rg -A3 'LC_(RPATH|BUILD_VERSION)'`; `codesign -d --entitlements :- T`; `otool -ov` (ObjC classes/methods); `xcrun swift-demangle --compact`.
@@ -61,14 +62,55 @@ Go: `go version -m T` alone usually answers the question.
 - Comparing versions: diff the inventories (`nm`, the module list, `go version -m`) before you diff any code.
 - Rebuilding: write the minimal reimplementation, then test it against the original (same inputs, same outputs).
 
+## iOS IPA extraction
+IPAs are zip files containing `Payload/AppName.app/`. The app bundle is a Mach-O + resources.
+```sh
+T=app.ipa; X=$TMPDIR/re/ipa; mkdir -p $X; unzip -q $T -d $X; APP=$(find $X/Payload -maxdepth 1 -name '*.app' | head -1)
+file "$APP/$(plutil -extract CFBundleExecutable raw "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+```
+- **Core Data models**: `find $APP -name '*.momd' -o -name '*.mom'`. Each `.mom` is a compiled model version. Count migrations: `find $APP -path '*/*.momd/*.mom' | wc -l`. Extract entity names: `strings *.mom | rg -o '[A-Z][a-zA-Z]+Entity'` or use `momdec` if available.
+- **Core Data migration archaeology**: migration count maps to feature timeline. v1-v10 = launch features, v50+ = mature product. Each migration adds/removes entities and attributes. `strings` on each `.mom` file reveals entity and attribute names per version. Sort by version number to trace when features shipped.
+- **Swift metadata**: `strings -a "$APP/BinaryName" | rg '(class|struct|enum|protocol)\s' | sort -u`. For Swift classes: `nm -gU "$APP/BinaryName" | swift-demangle | rg 'type metadata accessor'`.
+- **Provisioning profile**: `security cms -D -i "$APP/embedded.mobileprovision"` (macOS) or `strings "$APP/embedded.mobileprovision" | rg -A2 'application-identifier'`.
+- **Frameworks**: `ls "$APP/Frameworks/"` lists all embedded frameworks (third-party SDKs).
+- **On Linux** (no otool/codesign): use `strings`, `nm`, `readelf` on the Mach-O (limited), or transfer to macOS for full analysis. `jtool2` is a Linux-compatible alternative to otool for Mach-O.
+
+## Ghidra headless (Linux, for native .so/.dylib)
+When otool/llvm-objdump aren't enough (complex native libs, need pseudocode):
+```sh
+T=libTarget.so; D=$TMPDIR/re/ghidra; mkdir -p $D
+analyzeHeadless $D proj -import $T -postScript DecompileAllFunctions.java -deleteProject -readOnly 2>&1 | tail -20
+```
+If `analyzeHeadless` isn't on PATH: `$(find /opt -name analyzeHeadless 2>/dev/null | head -1)` or `$GHIDRA_HOME/support/analyzeHeadless`.
+
+For targeted decompile of specific functions:
+```sh
+# Dump all decompiled output, then grep
+analyzeHeadless $D proj -import $T -postScript DecompileAllFunctions.java -scriptPath /path/to/scripts -deleteProject > $D/all_decompiled.c 2>&1
+rg -A 50 'FunctionName' $D/all_decompiled.c
+```
+- **Symbol inventory first**: `nm -D --defined-only $T | head -200` (ELF exports). `readelf -s $T | rg FUNC | head -200` for all symbols.
+- **C++ demangling**: `nm -D $T | c++filt | rg -v '^$' | head -200`.
+- **Strings for algorithm identification**: `strings -a -n 8 $T | rg -i 'mayhew|trimp|rmssd|velocity|strain|1rm|heart.rate|kalman|filter' | sort -u`. Algorithm names, paper references, and constant names survive compilation.
+- **Function size as complexity signal**: large functions (100+ lines decompiled) are often the core algorithms. `rg -c '^' $D/all_decompiled.c` per function block.
+
+## Java/Kotlin API reconstruction (decompiled Android apps)
+After `jadx -d X a.apk`:
+- **Retrofit endpoints**: `rg -n '@(GET|POST|PUT|DELETE|PATCH|HEAD)\b' X --include '*.java' | sort`. Each annotation has the URL path. The interface file is the complete API surface.
+- **OkHttp interceptors**: `rg -l 'Interceptor' X --include '*.java'` for auth headers, token refresh, request signing.
+- **Data models** (request/response): `rg -l '@SerializedName|@Json|data class' X --include '*.java' --include '*.kt'`. Gson annotations map JSON keys to field names.
+- **Base URL**: `rg -n 'baseUrl|BASE_URL|api_url' X --include '*.java'`.
+- **Service registration**: `rg -n 'create\(.*Service|\.class\)' X --include '*.java'` shows which services are registered with Retrofit.
+- **State machines**: `rg -n 'sealed class|enum.*State|when.*is.*State' X --include '*.java' --include '*.kt'` for state machine patterns (common in workout/session tracking).
+
 ## Traps
 - Electron copy: copy `app.asar.unpacked/` together with `app.asar`. `asar extract` reads the unpacked files from `<archive>.unpacked/` next to the archive, and fails on every one of them if that folder is missing.
 - Ghidra: `DecompileAll.java` is not stock; it ships in `ghidra/` here. Run `analyzeHeadless $D p -import T -loader-libraryLoadDepth 0 -scriptPath <skill dir>/ghidra -postScript DecompileAll.java $D/decomp.c -deleteProject` (depth 0 skips importing every library on the search path).
-
-## Install (only on request)
-`brew install jadx apktool radare2 binwalk wabt wireshark ghidra` · `npm i -g @electron/asar` · `dotnet tool install -g ilspycmd` · `cargo install cargo-audit`.
 
 ## Platform: Windows
 This skill targets macOS. On Windows `otool`, `lipo`, `nm -gU` and `dtrace` do not exist.
 **Read `WINDOWS.md` in this directory first** — it maps every macOS command to a Windows equivalent
 (`llvm-objdump`, `llvm-nm`, `llvm-readobj`, `llvm-strings`, GnuWin32 `file`, `pefile`), including a ready-to-paste PE recon block.
+
+## Install (only on request)
+`brew install jadx apktool radare2 binwalk wabt wireshark ghidra` · `npm i -g @electron/asar` · `dotnet tool install -g ilspycmd` · `cargo install cargo-audit`.
