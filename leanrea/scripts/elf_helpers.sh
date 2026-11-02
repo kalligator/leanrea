@@ -57,7 +57,7 @@ fnof() {
 trail() {
   local dis="$1" fn="${2#0x}"
   [ -f "$dis" ] || { echo "File not found: $dis" >&2; return 1; }
-  awk -v s="${fn}:" '$1==s{p=1} p&&/endbr64/&&$1!=s{exit} p' "$dis" | rg 'call|lea .*#|cmp|test|ret'
+  awk -v s="${fn}:" '$1==s{p=1} p&&/endbr64/&&$1!=s{exit} p' "$dis" | grep -E 'call|lea .*#|cmp|test|ret'
 }
 
 # 5. elf_recon <binary> [out_dir]
@@ -71,18 +71,18 @@ elf_recon() {
   echo "=== FILE ==="
   file -b "$bin"
   echo "=== ELF HEADER ==="
-  readelf -hW "$bin" | rg 'Class|Machine|Type|Entry point'
+  readelf -hW "$bin" | grep -E 'Class|Machine|Type|Entry point'
   echo "=== DYNAMIC / NEEDED ==="
-  readelf -dW "$bin" | rg 'NEEDED|RUNPATH|RPATH|SONAME'
+  readelf -dW "$bin" | grep -E 'NEEDED|RUNPATH|RPATH|SONAME'
   echo "=== EXPORTS (Dynamic) ==="
   nm -D --defined-only "$bin" 2>/dev/null | head -150
   echo "=== IMPORTS ==="
   nm -D --undefined-only "$bin" 2>/dev/null | awk '{print $NF}' | tr '\n' ' '; echo
   echo "=== STRINGS (Preview) ==="
-  strings -a -n 5 "$bin" | rg -v '^[_.$]|^GLIBC|^GCC' | head -300
+  strings -a -n 5 "$bin" | grep -v -E '^[_.$]|^GLIBC|^GCC' | head -300
   echo "=== DISASSEMBLY ==="
   objdump -d -M intel --no-show-raw-insn -C "$bin" > "$out_dir/dis.txt"
   echo "Disassembly written to: $out_dir/dis.txt"
   echo "=== FUNCTIONS ==="
-  rg '^[0-9a-f]+ <.*>:$' "$out_dir/dis.txt" | rg -v '@plt>' | head -150
+  grep -E '^[0-9a-f]+ <.*>:$' "$out_dir/dis.txt" | grep -v '@plt>' | head -150
 }

@@ -106,7 +106,7 @@ analyzeHeadless /tmp/ghidra_proj temp -import target.exe -loader-libraryLoadDept
 wrestool -l target.exe
 
 # Extract embedded application manifest (shows elevation level, DPI awareness):
-wrestool -x -t 24 target.exe
+wrestool -x -R -t 24 target.exe
 
 # Extract main application icon:
 wrestool -x -t 14 -n 1 target.exe > icon.ico
