@@ -131,15 +131,15 @@ leanrea uses standard tools already present on most developer setups or availabl
 
 - **Linux (Debian / Ubuntu)**:
   ```sh
-  sudo apt install binutils file ripgrep jq radare2 binwalk squashfs-tools p7zip-full acpica-tools dmidecode flashrom pciutils usbutils tshark strace ltrace gdb wabt sqlite3 qemu-user-static
+  sudo apt install binutils file ripgrep jq radare2 binwalk squashfs-tools p7zip-full acpica-tools dmidecode flashrom pciutils usbutils tshark strace ltrace gdb wabt sqlite3 qemu-user-static icoutils innoextract msitools python3-pefile
   ```
 - **Linux (Fedora / RHEL)**:
   ```sh
-  sudo dnf install binutils file ripgrep jq radare2 binwalk squashfs-tools p7zip acpica-tools dmidecode flashrom pciutils usbutils wireshark-cli strace ltrace gdb wabt sqlite qemu-user-static
+  sudo dnf install binutils file ripgrep jq radare2 binwalk squashfs-tools p7zip acpica-tools dmidecode flashrom pciutils usbutils wireshark-cli strace ltrace gdb wabt sqlite qemu-user-static icoutils innoextract msitools python3-pefile
   ```
 - **Linux (Arch Linux)**:
   ```sh
-  sudo pacman -S binutils file ripgrep jq radare2 binwalk squashfs-tools p7zip acpica dmidecode flashrom pciutils usbutils wireshark-cli strace ltrace gdb wabt sqlite qemu-user-static
+  sudo pacman -S binutils file ripgrep jq radare2 binwalk squashfs-tools p7zip acpica dmidecode flashrom pciutils usbutils wireshark-cli strace ltrace gdb wabt sqlite qemu-user-static icoutils innoextract msitools python-pefile
   ```
 - **macOS (Homebrew)**:
   ```sh

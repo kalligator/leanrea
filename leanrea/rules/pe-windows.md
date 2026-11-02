@@ -62,3 +62,74 @@ ilspycmd -p -o "$D/dotnet_src" target.dll
 # Search P/Invoke native interop calls
 rg -n 'DllImport' "$D/dotnet_src"
 ```
+
+---
+
+## 4. Analyzing Windows PEs from Linux (Host: Linux)
+
+Linux is a first-class host for reverse engineering Windows binaries. You do not need a Windows VM for static analysis.
+
+### A. Headers, Imports & Sections (Native Linux Tools)
+Standard GNU `objdump` on Linux natively parses PE32 / PE32+ (COFF):
+```sh
+# Headers and section table:
+objdump -p target.exe | head -60
+
+# Import DLLs and imported functions:
+objdump -p target.exe | grep -A 10 'DLL Name:'
+
+# Or via LLVM (if installed):
+llvm-readobj --coff-imports target.exe
+```
+
+### B. Python `pefile` (Fast, Deep Structural Inventory)
+```sh
+# One-liner to dump DLL imports and functions:
+python3 -c "import pefile, sys; pe = pefile.PE(sys.argv[1]); [print(f'=== {e.dll.decode()} ===\n' + '\n'.join(i.name.decode() for i in e.imports if i.name)) for e in getattr(pe, 'DIRECTORY_ENTRY_IMPORT', [])]" target.exe
+
+# Dump exports:
+python3 -c "import pefile, sys; pe = pefile.PE(sys.argv[1]); [print(e.name.decode() if e.name else hex(e.ordinal), hex(e.address)) for e in getattr(getattr(pe, 'DIRECTORY_ENTRY_EXPORT', None), 'symbols', [])]" target.exe
+```
+
+### C. Disassembly & Decompilation on Linux
+```sh
+# Disassemble x86/x64 PE with Intel syntax:
+objdump -d -M intel target.exe > dis.txt
+
+# Decompile full PE to C pseudocode with headless Ghidra on Linux:
+analyzeHeadless /tmp/ghidra_proj temp -import target.exe -loader-libraryLoadDepth 0 -scriptPath leanrea/scripts -postScript DecompileAll.java /tmp/decomp.c -deleteProject
+```
+
+### D. Windows Resources & Manifests on Linux
+```sh
+# List resources (.rsrc section: icons, manifests, version info):
+wrestool -l target.exe
+
+# Extract embedded application manifest (shows elevation level, DPI awareness):
+wrestool -x -t 24 target.exe
+
+# Extract main application icon:
+wrestool -x -t 14 -n 1 target.exe > icon.ico
+```
+
+### E. Extracting Windows Installers on Linux
+```sh
+# NSIS installer or self-extracting archive (built-in 7z on Linux):
+7z x setup.exe -o/tmp/extracted
+
+# InnoSetup installer (via native Linux innoextract):
+innoextract -d /tmp/extracted setup.exe
+
+# Windows Installer MSI (via native Linux msitools):
+msiextract -C /tmp/extracted setup.msi
+```
+
+### F. Dynamic API Call Tracing via Wine (Optional)
+When static analysis needs runtime confirmation, Wine can trace every Windows API call on Linux without a VM:
+```sh
+# Trace all Windows API DLL calls (relay trace):
+WINEDEBUG=+relay wine target.exe 2>&1 | rg -v 'ntdll|kernelbase|gdi32' | head -200
+
+# Attach Wine GDB:
+winedbg --gdb target.exe
+```
