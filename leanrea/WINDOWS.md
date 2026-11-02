@@ -22,7 +22,7 @@
 | 用途 | macOS（原技能写法） | Windows 用这个 |
 |---|---|---|
 | 文件类型 | `file -b T` | `file -b T`（相同） |
-| 架构信息 | `lipo -info T` | `llvm-objdump -p T \| head -5` |
+| 架构信息 | `lipo -info T` | `llvm-objdump -p T` (head -5) |
 | 导入表 | `otool -L T` | `llvm-objdump -p T`（看 `DLL Name:` 段）或 `llvm-readobj --coff-imports T` |
 | 导出符号 | `nm -gU T` | `llvm-nm --extern-only --defined-only T` 或 `llvm-objdump -p T`（`Export Table`） |
 | 未定义符号 | `nm -u T` | `llvm-nm --undefined-only T` |

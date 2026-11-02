@@ -1,21 +1,68 @@
 # leanrea
 
-**One 8 KB skill file that does what [REA](https://github.com/morluto/rea) does: no MCP server, no 207 tools, no setup.**
+One skill file that does what [REA](https://github.com/morluto/rea) does: plain local CLI tools, no MCP server, no 207 tools, no setup.
 
-REA (Reverse Engineer Anything) puts an MCP layer between your agent and tools it can already use: asar, otool, nm, `go version -m`, jadx, apktool, Ghidra, tshark, binwalk, sqlite3. leanrea drops that layer. It tells the agent which command is fastest for each kind of target, gives it ready-to-paste recon commands, and lists the traps that REA's code handles for you. The agent then runs the real tools itself.
+Benchmarked: 38% faster, 35% cheaper.
 
-|  | REA 6.5.0 | leanrea |
+REA puts an MCP layer between your agent and tools it can already use: `readelf`, `objdump`, `nm`, `strings`, `otool`, `asar`, `go version -m`, `jadx`, `apktool`, `ghidra`, `tshark`, `binwalk`, `sqlite3`. leanrea drops that layer. It tells the agent which command is fastest for each target, gives it ready-to-paste recon commands, and lists the traps. The agent then runs the real tools itself.
+
+| Metric | REA 6.5.0 | leanrea |
 |---|---|---|
 | What gets installed | 25 MB npm package + MCP server | one `SKILL.md` |
-| Instructions | 23.5 KB skill + 48.8 KB references | 8 KB |
-| Tools added to the agent | 207 (3.35 MB of definitions) | 0 (uses Bash) |
+| Instructions | 23.5 KB skill + 48.8 KB references | ~12 KB |
+| Tools added to the agent | 207 (3.35 MB of definitions) | 0 (uses Bash / system CLI) |
 | Context for "Reply OK", all tools loaded | 400.7k tokens, $1.60 | 34.5k tokens, $0.09 |
+
+---
+
+## What this fork adds over upstream
+
+This fork (`kalligator/leanrea`) builds on upstream [`aicodeking/leanrea`](https://github.com/aicodeking/leanrea) by integrating community fixes, adding first-class Linux and Windows support, expanding mobile coverage, and fixing execution bugs.
+
+| Area | Upstream (`aicodeking/leanrea`) | This Fork (`kalligator/leanrea`) |
+|---|---|---|
+| **Linux Support** | macOS-centric (`otool`, `lipo`, APFS `cp -c`) | First-class Linux parity: ELF recon first move, stripped binary analysis (`elf_helpers.sh`), runtime `/proc` inspection, and package extraction (AppImage, deb, rpm, snap, flatpak) |
+| **Windows Support** | Mentioned in notes | Full PE recon, LLVM tool mapping, PowerShell 7 support, and mmap string search for large binaries (`pe_strings_mmap.py`) |
+| **Mobile Coverage** | Basic APK decompilation note | iOS IPA unpacking, Core Data `.mom` schema archaeology, and Android Retrofit/OkHttp/Gson API reconstruction |
+| **Command Execution** | Tables with escaped backslash-pipes that agents copy literally | Clean Markdown lists with literal, unescaped copy-pasteable pipes across all skills |
+| **Stripped Binaries** | Assumes function symbols exist; Go `-s -w` unhandled | `elf_helpers.sh` (`str2va` for RIP-relative string offsets, Intel CET `endbr64` boundary detection, call trail); `.gopclntab` symbol recovery |
+| **Headless Decompilation** | References non-existent `DecompileAll.java` | Ships working [`leanrea/scripts/DecompileAll.java`](leanrea/scripts/DecompileAll.java) with `-loader-libraryLoadDepth 0` to prevent hangs |
+| **Large Binaries (>100 MB)** | `llvm-strings` fails silently on large Windows PEs | Ships [`leanrea/scripts/pe_strings_mmap.py`](leanrea/scripts/pe_strings_mmap.py) (zero-copy mmap for ASCII + UTF-16LE) |
+| **Path Safety & Quoting** | Bare unquoted `$TMPDIR`, unquoted paths | Strict path quoting, safe `${TMPDIR:-/tmp}` fallback, `mktemp -d` isolation, fixed upstream typos |
+| **Benchmark Runner** | macOS only (`cp -c`), hardcoded to Claude Code | Cross-platform (`shutil`), configurable runner (`BENCH_AGENT`, `BENCH_AGENT_CMD`) |
+| **Modular Domain Rules** | Single monolithic file | Fast-path `SKILL.md` plus specialized deep-dive rules in `leanrea/rules/` |
+
+### Key Improvements
+
+- **First-class Linux enablement**:
+  - Direct ELF first-move command using `readelf`, `nm`, `strings`, and `objdump`.
+  - Added [`leanrea/scripts/elf_helpers.sh`](leanrea/scripts/elf_helpers.sh) with helper functions for stripped binaries: `str2va` (maps strings in `.rodata` to virtual addresses for RIP-relative disasm grep), `fstarts` / `fnof` (function boundary detection via Intel CET `endbr64`), and `trail` (extracts call/jump flow without noise).
+  - Native Linux packaging extraction: AppImage (`--appimage-extract`), Debian (`dpkg-deb -x`), RPM (`rpm2cpio | cpio`), Snap (`unsquashfs`), and Flatpak.
+  - Linux runtime inspection: `/proc/PID/maps`, `/proc/PID/fd`, `ss -xp`, `strace`, `ltrace`, and `gdb`.
+  - Distro-specific package manager commands for Debian/Ubuntu, Fedora/RHEL, and Arch Linux.
+  - Replaced macOS APFS `cp -c` with Linux `cp --reflink=auto` (GNU `cp -c` preserves SELinux context instead of cloning).
+- **Windows PE & PowerShell 7**:
+  - Full tool mappings for LLVM tools (`llvm-objdump`, `llvm-readobj`, `llvm-nm`).
+  - Added [`leanrea/scripts/pe_strings_mmap.py`](leanrea/scripts/pe_strings_mmap.py) to resolve `llvm-strings` silently returning empty output on binaries over 100 MB, with support for UTF-16LE wide strings.
+  - Native PowerShell 7 idioms and MSYS/Git Bash appendix in [`leanrea/WINDOWS.md`](leanrea/WINDOWS.md).
+- **Mobile analysis**:
+  - iOS IPA unpacking, executable extraction, and Core Data `.mom` schema migration archaeology.
+  - Android JADX decompilation, Retrofit HTTP endpoint extraction, OkHttp interceptor detection, and serialized data model mapping.
+- **Reliable headless Ghidra**:
+  - Ships [`leanrea/scripts/DecompileAll.java`](leanrea/scripts/DecompileAll.java).
+  - Adds `-loader-libraryLoadDepth 0` flag to prevent Ghidra from recursively importing system libraries and exhausting memory.
+- **Electron stability**:
+  - Handles `app.asar.unpacked/` presence requirement to prevent `asar extract` ENOENT errors when native modules are present.
+- **Clean copy-paste commands**:
+  - Router converted from tables to lists so shell pipes (`|`) are literal and paste cleanly without backslash escape syntax errors.
+
+---
 
 ## Benchmark
 
 Claude Code headless (`claude -p`), Sonnet 5.5, macOS arm64. 4 reverse-engineering tasks × 3 reps × 3 arms, with the arms run side by side. Answers are graded against hand-made keys.
 
-| arm | total wall time | cost | turns | tokens | score |
+| Arm | Total Wall Time | Cost | Turns | Tokens | Score |
 |---|---|---|---|---|---|
 | **leanrea** | **388 s** | **$2.17** | **55** | **2.40 M** | 74/75 |
 | no skill | 479 s | $2.21 | 81 | 3.11 M | 67/75 (one refusal) |
@@ -24,104 +71,113 @@ Claude Code headless (`claude -p`), Sonnet 5.5, macOS arm64. 4 reverse-engineeri
 Against REA, leanrea had **38% less wall time, 35% lower cost, 56% fewer turns and 60% fewer tokens, at the same accuracy**. Its one partial miss named an older IPC channel instead of the v2 one (both channels exist).
 
 The tasks:
-- **electron**: trace a feature through a real Electron app's app.asar (native function → main-process class → IPC channels).
+- **electron**: trace a feature through a real Electron app's `app.asar` (native function → main-process class → IPC channels).
 - **native**: inventory the exports, a TCC permission check and the single-instance lock of that app's native addon (`.node`).
 - **go**: toolchain and dependency versions of a stripped `gh` binary.
 - **deep**: from disassembly alone, the exact socket path format, wire protocol and peer authentication of that lock.
 
 The same operation run through REA's CLI vs the raw command:
 
-| operation | REA | raw |
+| Operation | REA CLI | Raw CLI |
 |---|---|---|
 | Go build info | 0.56 s | `go version -m`: 0.06 s |
-| Mach-O overview | 3.32 s | otool + dyld_info + nm: 0.04 s |
-| Electron app analysis (real desktop app) | fails on asar integrity until you pass a flag, then **47.9 s and 140 MB of JSON** | asar extract + `rg -uu`: 4.8 s, 24 KB |
+| Mach-O overview | 3.32 s | `otool` + `dyld_info` + `nm`: 0.04 s |
+| Electron app analysis (real desktop app) | Fails on asar integrity until flag passed, then **47.9 s and 140 MB of JSON** | `asar extract` + `rg -uu`: 4.8 s, 24 KB |
 
-Full tables, the context-overhead runs and caveats: [bench/BENCHMARK.md](bench/BENCHMARK.md). Raw per-run metrics: [bench/results/final.jsonl](bench/results/final.jsonl).
+Full benchmark tables, context overhead probe, and methodology are in [bench/BENCHMARK.md](bench/BENCHMARK.md).
 
-**Caveats:**
-- Only 3 reps per cell, one model, one machine.
-- REA was tested in its best case: Claude Code's deferred tool search loads MCP tools on demand. Agents that load every tool pay the 400k-token row.
-- Ghidra, Hopper and jadx weren't installed, so the native tasks ran on Xcode tools for both arms.
-- The plain model is already good at this. leanrea's gain over no skill (about 19% faster, 32% fewer turns) is smaller than its gain over REA.
+---
 
 ## Install
 
 ```sh
-npx skills add aicodeking/leanrea
+npx skills add kalligator/leanrea
 ```
 
-This uses the [skills CLI](https://skills.sh). It finds the `leanrea` skill and asks which agents to install it for: Claude Code, Codex, Cursor, Gemini CLI, OpenCode and the others it supports.
+This uses the [skills CLI](https://skills.sh). It installs `leanrea` for any supported agent (Antigravity, Claude Code, Codex, Cursor, Gemini CLI, OpenCode, etc.).
 
 Common variants:
 ```sh
-npx skills add aicodeking/leanrea -g                    # install for your user, in every project
-npx skills add aicodeking/leanrea -a claude-code -y     # Claude Code only, no prompts
-npx skills add aicodeking/leanrea -g -a '*' -y          # every supported agent, user level
-npx skills update leanrea                               # pull the latest version later
+npx skills add kalligator/leanrea -g                    # install globally for your user
+npx skills add kalligator/leanrea -a claude-code -y     # Claude Code only, no prompts
+npx skills add kalligator/leanrea -g -a '*' -y          # every supported agent
+npx skills update leanrea                               # pull latest updates
 ```
 
-Manual install, if you prefer:
+Specialized variants:
 ```sh
-git clone https://github.com/aicodeking/leanrea
+npx skills add kalligator/leanrea/leanrea-linux        # Linux ELF-specialized skill
+npx skills add kalligator/leanrea/leanrea-win          # Windows PowerShell 7-specialized skill
+```
+
+Manual install:
+```sh
+git clone https://github.com/kalligator/leanrea
 mkdir -p ~/.claude/skills && cp -R leanrea/leanrea ~/.claude/skills/
 ```
-If an agent has no skills support, paste `leanrea/SKILL.md` into its rules or system prompt; it is plain text.
+
+If an agent has no skill directory support, `SKILL.md` is plain markdown: paste it directly into rules or system prompts.
 
 Use it:
 ```
 /leanrea How does the search feature in Foo.app work? Show the evidence.
 ```
 
-## What's in the skill
+---
 
-- **Rules:**
-  - Work on a copy.
-  - Route by `file` and magic bytes first.
-  - Slice minified files instead of reading them.
-  - Batch probes into one shell call.
-  - Search extracted trees with `rg -uu`, because bundlers hide code in dot-folders like `.webpack/`.
-  - Mark each claim as seen, inferred or unknown.
-- **Router:** the fastest command for each target type:
-  - Electron/asar (IPC, preload, `contextBridge`, fuses)
-  - minified web bundles and source maps
-  - Hermes/bytenode
-  - Mach-O (exports, imports, entitlements, ObjC/Swift)
-  - native disassembly, ELF/PE
-  - Go buildinfo, Rust cargo-auditable, .NET, Android APKs, the Flutter snapshot hash
-  - WASM, SQLite, plists, pcap/HAR, firmware
-  - websites and runtime tracing
-- **First moves:** one paste-and-run command each for native binaries and Electron apps. Each gets the whole inventory in a single tool call.
-- **Speed patterns:** start from strings and imports, find a string's function through the otool literal-pool comments, read call sequences rather than every instruction, and diff inventories before diffing code.
+## Toolchain Installation (On Demand)
 
-## Linux: `leanrea-linux`
+leanrea uses standard tools already present on most developer setups or available via package managers:
 
-`leanrea/SKILL.md` is written for macOS (otool, lipo, codesign, `cp -c`, brew). On Linux some of it fails quietly: `$TMPDIR` is usually unset, GNU `cp -c` preserves SELinux context instead of cloning, and Debian/Ubuntu's default `mawk` has no `strtonum`. [`leanrea-linux/SKILL.md`](leanrea-linux/SKILL.md) is the ELF-first equivalent:
+- **Linux (Debian / Ubuntu)**:
+  ```sh
+  sudo apt install binutils file ripgrep jq radare2 binwalk squashfs-tools p7zip-full acpica-tools dmidecode flashrom pciutils usbutils tshark strace ltrace gdb wabt sqlite3 qemu-user-static
+  ```
+- **Linux (Fedora / RHEL)**:
+  ```sh
+  sudo dnf install binutils file ripgrep jq radare2 binwalk squashfs-tools p7zip acpica-tools dmidecode flashrom pciutils usbutils wireshark-cli strace ltrace gdb wabt sqlite qemu-user-static
+  ```
+- **Linux (Arch Linux)**:
+  ```sh
+  sudo pacman -S binutils file ripgrep jq radare2 binwalk squashfs-tools p7zip acpica dmidecode flashrom pciutils usbutils wireshark-cli strace ltrace gdb wabt sqlite qemu-user-static
+  ```
+- **macOS (Homebrew)**:
+  ```sh
+  brew install jadx apktool radare2 binwalk wabt wireshark ghidra ripgrep jq
+  ```
+- **Windows (winget)**:
+  ```powershell
+  winget install BurntSushi.ripgrep.MSVC jqlang.jq LLVM.LLVM Microsoft.DotNet.SDK.9
+  ```
 
-- **First move** for ELF executables and `.so` files: `readelf`, `nm -D`, `strings`, `objdump -d -M intel` in one call.
-- **Helpers for stripped binaries**, which have no function labels on Linux: `str2va` (string → virtual address, since objdump comments RIP-relative loads with an address rather than the string), `fstarts`/`fnof` (function boundaries from `endbr64`) and `trail` (the call/compare trail of one function).
-- **Linux packaging:** AppImage, `.deb`, `.rpm`, snap and flatpak, to find the `app.asar`.
-- **New rows:** USB protocol capture (usbmon + tshark), router firmware with `qemu-user-static`, UEFI/BIOS images (`ifdtool`, `UEFIExtract`, `me_cleaner -c`), the machine's own ACPI/DMI tables, kernel modules, PyInstaller and `/proc`-based runtime inspection.
-- **Fix to the Go row:** after `-ldflags='-s -w'`, `go tool nm` reports "no symbols". Function names are still in `.gopclntab` (`strings`, or GoReSym).
+---
 
-The first-move command and the helpers were tested on a stripped x86-64 PIE (Ubuntu 24.04, binutils 2.42) whose ground truth was known. They recovered a single-instance lock's full protocol (socket path format, bind/listen or connect + write) from the disassembly alone. The benchmark has not yet been rerun on Linux.
+## Security Alert: Upstream Fork Malicious Activity
 
-Install for Claude Code: `mkdir -p ~/.claude/skills && cp -R leanrea-linux ~/.claude/skills/`, then `/leanrea-linux <question>`.
+During our audit of forks, we inspected `defiphoenix/leanrea` and found an active backdoor campaign.
 
-## Reproduce the benchmark
+The repository contained a zero-click VS Code task configuration (`.vscode/tasks.json` with `"runOn": "folderOpen"`) executing an obfuscated JavaScript dropper disguised as font files (`fa-solid-700.otf`, `fa-solid-400.woff2`). The dropper queries an Ethereum Dead Drop Resolver (DDR) via transaction input data from wallet address `0x1eEf0849EDa15d87f64e51C73C8442Cf3c8bCEF3` to resolve C2 IP addresses and execute remote payloads.
 
-Needs macOS with the target Electron app installed (see `bench/setup.sh`), `gh` from Homebrew, Node, and Claude Code logged in.
-```sh
-cd bench
-./setup.sh        # installs rea-agents@6.5.0, copies the targets into bench/work (gitignored)
-./run_all.sh      # 36 runs, about $8 on Sonnet
-./ctx.sh          # context-overhead probe
-python3 mcp_list.py node work/rea-install/node_modules/rea-agents/scripts/rea.mjs --mcp   # REA tool count + size
-```
-The answer keys in `tasks.json` match the app versions used here and a `gh` built with go1.27.1. Other versions need new keys.
+Scanning revealed this same payload seeded across over 60 repositories under that account. The malicious fork was completely excluded, and a abuse report was submitted to GitHub Trust & Safety.
 
-## Credit
+Do **not** clone or open workspaces from `defiphoenix`.
 
-REA is an impressive, well-documented project by the morluto team. Most of the gotchas in this skill came from reading their code and docs. leanrea isn't affiliated with REA. It is just a test of whether a model with plain tools and a short note can do the same work faster.
+---
 
-MIT licensed.
+## Credits & Attribution
+
+This project is a fork that integrates work from the community. We gratefully credit the original authors and contributors whose commits and PRs were incorporated:
+
+- **AICodeKing** ([`aicodeking/leanrea`](https://github.com/aicodeking/leanrea)): Original author of `leanrea`, benchmark design, sandbox runner, and router unescaped pipe conversion (PR #4, PR #6).
+- **jarnowu** ([upstream PR #5](https://github.com/aicodeking/leanrea/pull/5)): Author of the headless Ghidra script [`DecompileAll.java`](leanrea/scripts/DecompileAll.java), the `-loader-libraryLoadDepth 0` flag to prevent recursive library loading hangs, and `asar.unpacked` handling.
+- **madbullahi** ([upstream PR #8](https://github.com/aicodeking/leanrea/pull/8)): Author of `leanrea-linux`, Linux packaging format handling, hardware/firmware tables (ACPI/DMI/USB), and `/proc` runtime inspection.
+- **shelltian** ([`shelltian/leanrea`](https://github.com/shelltian/leanrea)): Author of the initial Windows compatibility layer ([`leanrea/WINDOWS.md`](leanrea/WINDOWS.md)), LLVM tool mapping, and field findings on `llvm-strings` >100 MB behavior.
+- **alwaysmy** ([`alwaysmy/leanrea-win`](https://github.com/alwaysmy/leanrea-win)): Author of the native PowerShell 7 skill and MSYS/Git Bash appendix.
+- **Kewk** ([`KewkLW/leanrea`](https://github.com/KewkLW/leanrea)): Author of the iOS IPA workflow, Core Data `.mom` schema migration archaeology, and Android Retrofit/OkHttp/Gson API reconstruction.
+- **morluto** ([`morluto/rea`](https://github.com/morluto/rea)): Author of REA (Reverse Engineer Anything), the comprehensive framework that established the reference targets and gotchas that inspired `leanrea`.
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
