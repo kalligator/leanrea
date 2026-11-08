@@ -29,7 +29,7 @@ questions get call chains and addresses; broad ones get shallow maps.
 | 4 | [Behavioral cloning (clean-room)](#4-behavioral-cloning-clean-room) |
 | 5 | [Games (offline / single-player)](#5-games-offline--single-player) |
 | 6 | [Firmware & embedded](#6-firmware--embedded) |
-| 7 | [Android](#7-android) |
+| 7 | [Mobile (Android & iOS)](#7-mobile-android--ios) |
 | 8 | [Electron & JavaScript](#8-electron--javascript) |
 | 9 | [Vulnerability research (authorized targets)](#9-vulnerability-research-authorized-targets) |
 | 10 | [Protecting your own software](#10-protecting-your-own-software) |
@@ -119,6 +119,24 @@ reader that prints a sample file.
 example message built from the code's constants.
 ```
 
+### Stripped Linux ELF analysis
+
+```text
+/leanrea On stripped ELF <PATH TO BINARY>, source leanrea/scripts/elf_helpers.sh
+and trace <FEATURE>. Use str2va to map string references in .rodata to virtual
+addresses for RIP-relative disasm grep, fnof to find function boundaries via
+Intel CET endbr64, and trail to follow the call graph without symbol names.
+```
+
+### Large Windows PE inspection (>100 MB)
+
+```text
+/leanrea Analyze <PATH TO LARGE PE EXECUTABLE>. Use leanrea/scripts/pe_strings_mmap.py
+to extract both ASCII and UTF-16LE strings with offsets without OOM, inspect
+imported DLLs via python3-pefile, and dump embedded manifests/resources with
+wrestool -R. Group findings by capability (crypto, IPC, network, persistence).
+```
+
 ---
 
 ## 4. Behavioral cloning (clean-room)
@@ -192,9 +210,9 @@ hypothesis.
 
 ---
 
-## 7. Android
+## 7. Mobile (Android & iOS)
 
-### Audit an APK
+### Audit an Android APK
 
 ```text
 /leanrea Analyze <PATH TO APK>. List declared permissions, exported components,
@@ -203,13 +221,31 @@ file for each finding. Distinguish references present in code from behaviors
 actually observed — a domain in a string is not proof it is contacted.
 ```
 
-### Storage, crypto & secrets review
+### Storage, crypto & secrets review (Android)
 
 ```text
 /leanrea On <APK>, determine how the app stores <data>: SharedPreferences, SQLite,
 files, keystore. Recover any embedded crypto (hardcoded keys/IVs, obfuscation
 routines) with the class/method that uses them. State whether data is encrypted at
 rest and in transit, with evidence, and list concrete risks.
+```
+
+### Audit an iOS IPA
+
+```text
+/leanrea Analyze <PATH TO IPA>. Unpack Payload/<App>.app, inspect Info.plist for
+declared permissions, URL schemes, App Transport Security exceptions and push
+entitlements. Extract Mach-O architecture with lipo/file and list exported classes
+and protocols. Map the main view controllers and navigation hierarchy for <FEATURE>.
+```
+
+### Core Data & schema archaeology (iOS)
+
+```text
+/leanrea On <unpacked iOS app>, locate and reconstruct the Core Data model from
+.mom / .momd files. List every entity, attribute (with type), and relationship.
+Identify which entity stores <user / transaction / session data> and map it to
+the local SQLite database layout.
 ```
 
 ---
@@ -367,5 +403,7 @@ hypotheses and next steps.
 
 ## Credits
 
-Adapted from [REA-Prompts](https://github.com/JoasASantos/REA-Prompts) (MIT) for the
-[leanrea](https://github.com/aicodeking/leanrea) skill workflow. License: MIT.
+- Original prompt pack: [REA-Prompts](https://github.com/JoasASantos/REA-Prompts) by Joas Santos (MIT).
+- Adapted for leanrea workflow: Dr. N. Praveen Kumar ([@samikshaheartcare-create](https://github.com/samikshaheartcare-create), [upstream PR #10](https://github.com/aicodeking/leanrea/pull/10)).
+- Extended for Linux ELF, Windows PE mmap, and iOS IPA tooling by [kalligator/leanrea](https://github.com/kalligator/leanrea).
+- License: MIT.

@@ -125,6 +125,18 @@ Use it:
 
 ---
 
+## Ready-to-Use Prompts
+
+Looking for specific prompts to copy-paste into your agent? See [**`PROMPTS.md`**](PROMPTS.md) for 20+ structured prompts covering:
+- **Feature Tracing**: Follow code flow from UI triggers to network/filesystem effects.
+- **Native Binaries**: ELF/PE/Mach-O triage, stripped Linux binaries (`elf_helpers.sh`), large Windows PEs (`pe_strings_mmap.py`), and wire protocol extraction.
+- **Clean-Room Cloning**: Extract behavior and write complete specifications without touching proprietary assets.
+- **Mobile & Embedded**: iOS IPA auditing, Core Data `.mom` schema archaeology, Android APKs, and firmware image triage.
+- **Electron & JavaScript**: IPC context-bridge audits and minified bundle reverse engineering.
+- **Vulnerability & Crash Triage**: Trust boundary audits, patch diffing, and crash root-cause investigation.
+
+---
+
 ## Toolchain Installation (On Demand)
 
 leanrea uses standard tools already present on most developer setups or available via package managers:
