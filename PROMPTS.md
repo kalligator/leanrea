@@ -1,14 +1,14 @@
-# leanrea Prompts — Reverse Engineering with the `/leanrea` skill
+# leanrea Prompts - Reverse Engineering with the `/leanrea` skill
 
 A copy-paste prompt pack for [leanrea](https://github.com/aicodeking/leanrea), the
-skill-only reverse-engineering helper. Unlike REA, leanrea adds **no MCP server** —
+skill-only reverse-engineering helper. Unlike REA, leanrea adds **no MCP server** -
 the agent uses the CLI tools it already has (`file`, `otool`, `nm`, `strings`, `rg`,
 `asar`, `go version -m`, …). These prompts are adapted from
 [REA-Prompts](https://github.com/JoasASantos/REA-Prompts) (MIT) for that
 skill-based workflow.
 
 Invoke the skill with `/leanrea` and paste one of the prompts below. Replace
-everything in `<angle brackets>` and keep each request to **one feature** — narrow
+everything in `<angle brackets>` and keep each request to **one feature** - narrow
 questions get call chains and addresses; broad ones get shallow maps.
 
 > ⚠️ **Use responsibly.** Only analyze software you own or are explicitly
@@ -17,7 +17,7 @@ questions get call chains and addresses; broad ones get shallow maps.
 > online games, or weaponizing a found vulnerability may violate law and terms of
 > service. Every prompt asks the agent to **work on a copy**, **start static**, and
 > **label each claim as seen / inferred / unknown** with file/function/offset
-> evidence — treat that as non-negotiable.
+> evidence - treat that as non-negotiable.
 
 ## Table of contents
 
@@ -322,7 +322,7 @@ hypotheses until validated in a controlled environment.
 
 ## 10. Protecting your own software
 
-> Scope: software **you own**, a vendor bug bounty, a CTF, or academic study — to
+> Scope: software **you own**, a vendor bug bounty, a CTF, or academic study - to
 > harden it, not to defeat someone else's protection.
 
 ### Assess my own product's protections
@@ -344,7 +344,7 @@ on disk, and how offline mode behaves. Goal is interoperability and security
 review. Report facts with evidence; flag anything you could not confirm.
 ```
 
-### Keygen-style analysis — document, don't bypass
+### Keygen-style analysis - document, don't bypass
 
 ```text
 /leanrea Find the validation routine for <license key / serial> in <binary I own
@@ -394,12 +394,12 @@ hypotheses and next steps.
 
 ## Why these work
 
-1. **One feature per prompt** — narrow questions return call chains and offsets.
-2. **Demand evidence** — file/function/offset citations stop confabulation.
-3. **Seen / inferred / unknown** — the three-bucket format keeps hypotheses honest.
-4. **Static first, on a copy** — matches leanrea's rules; add runtime only when needed.
-5. **End with a deliverable** — a SPEC, a reader script, a minimal rebuild forces the agent to verify its own claims.
-6. **State the scope out loud** — "software I own", "offline single-player", "document, don't bypass" keeps results usable for research and reporting.
+1. **One feature per prompt** - narrow questions return call chains and offsets.
+2. **Demand evidence** - file/function/offset citations stop confabulation.
+3. **Seen / inferred / unknown** - the three-bucket format keeps hypotheses honest.
+4. **Static first, on a copy** - matches leanrea's rules; add runtime only when needed.
+5. **End with a deliverable** - a SPEC, a reader script, a minimal rebuild forces the agent to verify its own claims.
+6. **State the scope out loud** - "software I own", "offline single-player", "document, don't bypass" keeps results usable for research and reporting.
 
 ## Credits
 
